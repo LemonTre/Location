@@ -70,7 +70,7 @@ public class LocationData extends DataSupport implements Parcelable{
         this.timestamp = timestamp;
     }
 
-    /*
+ /*
     public int getFlag1(){
         return flag1;
     }
@@ -109,7 +109,7 @@ public class LocationData extends DataSupport implements Parcelable{
         dest.writeString(loctype);
         dest.writeFloat(accuracy);
         dest.writeLong(timestamp);
-       //dest.writeInt(flag1);
+        //dest.writeInt(flag1);
         //dest.writeInt(flag2);
     }
 }

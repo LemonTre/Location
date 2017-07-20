@@ -12,6 +12,7 @@ import android.location.LocationManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.Settings;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -23,6 +24,8 @@ import android.widget.Toast;
 
 import org.litepal.crud.DataSupport;
 
+import java.io.File;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
@@ -30,30 +33,43 @@ import java.util.TimerTask;
 
 import static android.location.LocationManager.NETWORK_PROVIDER;
 
-public class MainActivity extends AppCompatActivity{
+
+public class MainActivity extends AppCompatActivity implements View.OnClickListener{
 
     private int gpsTonet = 0 ;
     private int flag1 = 0 ;
     private int flag2 = 0 ;
     private static final int TWO_MINUTES = 1000 * 60 * 2;
-    private Timer mTimer = new Timer();
-    private Timer mTimer1,mTimer2;
-    private TimerTask mTimerTask,mTimerTask1,mTimerTask2;
+    private Timer mTimer;
+    private Timer mTimer1;
+    private TimerTask mTimerTask,mTimerTask1;
     private Location currentBestLocation;
     private LocationManager locationManager ;
-    //private WifiManager wifi = null;
-    //private TelephonyManager tele = null;
+
     private String locationProvider;
     private EditText editText;
     private long minTime = 2000;
     private NetworkInfo activeNetInfo = null;
     private BroadcastReceiver mReceiver = null;
     private IntentFilter filter;
+    private String fileName ;
+    private String excelPath ;
+    private SaveToExcelUtil st ;
+    private String latitude;
+    private String longitude;
+    private String loctype;
+    private float accuracy;
+    private String dateStr;
+
+    private int count = 0 ;
+    private Data data ;
+
 
     @Override
     protected void onDestroy(){
         super.onDestroy();
         try{
+
             locationManager.removeUpdates(networkListener);
             locationManager.removeUpdates(gpsListener);
         }catch (Exception e){
@@ -71,6 +87,7 @@ public class MainActivity extends AppCompatActivity{
         setContentView(R.layout.activity_main);
 
         //注册网络监听
+
         filter = new IntentFilter();
         filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
 
@@ -95,16 +112,26 @@ public class MainActivity extends AppCompatActivity{
 
         registerReceiver(mReceiver,filter);
 
-        final Button addData = (Button) findViewById(R.id.add_data);
+        Button addData = (Button) findViewById(R.id.add_data);
         Button deleteData = (Button) findViewById(R.id.delete_data);
         Button queryData = (Button) findViewById(R.id.query_data);
         Button timerStart = (Button) findViewById(R.id.timer_start);
         Button timerEnd = (Button) findViewById(R.id.timer_end);
-        final Button startLoc = (Button) findViewById(R.id.start_loc);
+        Button startLoc = (Button) findViewById(R.id.start_loc);
+        Button send = (Button) findViewById(R.id.finish);
+        Button exportData = (Button) findViewById(R.id.export_data);
 
         editText = (EditText) findViewById(R.id.edit_text);
-        Button send = (Button) findViewById(R.id.finish);
 
+
+        addData.setOnClickListener(this);
+        deleteData.setOnClickListener(this);
+        queryData.setOnClickListener(this);
+        timerStart.setOnClickListener(this);
+        timerEnd.setOnClickListener(this);
+        startLoc.setOnClickListener(this);
+        send.setOnClickListener(this);
+        exportData.setOnClickListener(this);
 
 
         /* 运行前数据库自动创建
@@ -114,144 +141,209 @@ public class MainActivity extends AppCompatActivity{
                 //Connector.getDatabase();
                 Toast.makeText(MainActivity.this,"Create database",Toast.LENGTH_SHORT).show();
             }
-        });
-        */
-
-        addData.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-
-                LocationData location1 = new LocationData();
-                location1.setLatitude("20.23423");
-                location1.setLongitude("121.23123");
-                location1.setLoctype("GPS定位");
-                location1.setTimestamp(System.currentTimeMillis());
-                location1.save();
-
-                LocationData location2 = new LocationData();
-                location2.setLatitude("21.12332");
-                location2.setLongitude("120.47532");
-                location2.setLoctype("基站定位");
-                location2.setTimestamp(System.currentTimeMillis());
-                location2.save();
-
-              //  Log.d("MainActivity11","the current time is " + System.currentTimeMillis());
-                Toast.makeText(MainActivity.this,"Add Data",Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        deleteData.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                //DataSupport.findBySQL("drop database LocationStore");
-                DataSupport.deleteAll(LocationData.class);
-                Toast.makeText(MainActivity.this,"Delete Data",Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        queryData.setOnClickListener(new View.OnClickListener() {
-
-
-
-
-            @Override
-            public void onClick(View v) {
-                ArrayList<LocationData> location_list = (ArrayList<LocationData>) DataSupport.findAll(LocationData.class);
-                Intent intent = new Intent(MainActivity.this, QueryActivity.class);
-                intent.putParcelableArrayListExtra("locations_list", location_list);
-                MainActivity.this.startActivity(intent);
-
-            }
-        });
-
-        timerStart.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mTimerTask = new TimerTask() {
-                    @Override
-                    public void run() {
-
-                        LocationData location1 = new LocationData();
-                        location1.setLatitude("22.23343");
-                        location1.setLongitude("121.22123");
-                        location1.setLoctype("Wifi定位");
-                        location1.setTimestamp(System.currentTimeMillis());
-                        location1.save();
-                    }
-                };
-                mTimer.schedule(mTimerTask, 2000, 2000);
-                Toast.makeText(MainActivity.this,"Start Add Data",Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        timerEnd.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mTimer.cancel();
-                Toast.makeText(MainActivity.this,"End Add Data",Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        startLoc.setOnClickListener(new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-
-                //获得位置管理器的实例
-                locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-                List<String> providers = locationManager.getProviders(true);
-
-                if(providers.contains(LocationManager.NETWORK_PROVIDER)){
-
-                }else if(providers.contains(LocationManager.GPS_PROVIDER)){
-
-                }else {
-                    Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                    startActivityForResult(intent,0);
-                }
-
-                if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
-                        .ACCESS_FINE_LOCATION) !=
-                        PackageManager.PERMISSION_GRANTED
-                        && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
-                        .ACCESS_COARSE_LOCATION) !=
-                        PackageManager.PERMISSION_GRANTED) {
-                    return;
-                }
-
-                if(activeNetInfo != null && activeNetInfo.isAvailable()){
-                    currentBestLocation = locationManager.getLastKnownLocation(NETWORK_PROVIDER);
-
-                    locationManager.requestLocationUpdates(NETWORK_PROVIDER, 0, 0, networkListener);
-                    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, minTime, 0,
-                            gpsListener);
-                    Log.d("MainActivity","time is " + "1");
-                    Toast.makeText(MainActivity.this,"监听",Toast.LENGTH_SHORT).show();
-                    //Toast.makeText(MainActivity.this,"网络无连接",Toast.LENGTH_SHORT).show();
-                    //Toast.makeText(MainActivity.this,"网络无连接",Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
-
-        send.setOnClickListener(new View.OnClickListener(){
-            @Override
-            public void onClick(View v){
-                String inputText = editText.getText().toString();
-                minTime = Long.parseLong(inputText) * 1000;
-                Toast.makeText(MainActivity.this,"时间间隔：" + inputText + "秒",Toast.LENGTH_SHORT).show();
-                editText.setText(null);
-            }
-        });
+        });*/
     }
 
 
     //onCreate()结束
 
+    @Override
+    public void onClick(View v){
+        switch (v.getId()){
+            case R.id.add_data:
+                addData();
+                break;
+            case R.id.delete_data:
+                deleteData();
+                break;
+            case R.id.query_data:
+                queryData();
+                break;
+            case R.id.timer_start:
+                timerStart();
+                break;
+            case R.id.timer_end:
+                timerEnd();
+                break;
+            case R.id.start_loc:
+                startLoc();
+                break;
+            case R.id.finish:
+                send();
+                break;
+            case R.id.export_data:
+
+                excelPath = getSDPath() + File.separator + "demo.xls" ;
+                st = new SaveToExcelUtil(this,excelPath);
+
+                ArrayList<LocationData> list = (ArrayList<LocationData>) DataSupport.findAll(LocationData.class);
+
+                try{
+                    saveData(list);
+                }catch (Exception e){
+                    e.printStackTrace();
+                }
+                break;
+            default:
+                break;
+
+        }
+    }
+
+    private void addData(){
+        LocationData location1 = new LocationData();
+        location1.setLatitude("20.23423");
+        location1.setLongitude("121.23123");
+        location1.setLoctype("GPS定位");
+        location1.setTimestamp(System.currentTimeMillis());
+        location1.save();
+
+        LocationData location2 = new LocationData();
+        location2.setLatitude("21.12332");
+        location2.setLongitude("120.47532");
+        location2.setLoctype("基站定位");
+        location2.setTimestamp(System.currentTimeMillis());
+        location2.save();
+
+        //  Log.d("MainActivity11","the current time is " + System.currentTimeMillis());
+        Toast.makeText(MainActivity.this,"Add Data",Toast.LENGTH_SHORT).show();
+    }
+
+    private void deleteData(){
+        DataSupport.deleteAll(LocationData.class);
+        data = new Data();
+        data.setFlag(0);
+        data.save();
+
+        Toast.makeText(MainActivity.this,"Delete Data",Toast.LENGTH_SHORT).show();
+    }
+
+    private void queryData(){
+        ArrayList<LocationData> location_list = (ArrayList<LocationData>) DataSupport.findAll(LocationData.class);
+        Intent intent = new Intent(MainActivity.this, QueryActivity.class);
+        intent.putParcelableArrayListExtra("locations_list", location_list);
+        MainActivity.this.startActivity(intent);
+    }
+
+    private void timerStart(){
+        mTimer = new Timer();
+        mTimerTask = new TimerTask() {
+            @Override
+            public void run() {
+
+                LocationData location1 = new LocationData();
+                location1.setLatitude("22.23343");
+                location1.setLongitude("121.22123");
+                location1.setLoctype("Wifi定位");
+                location1.setTimestamp(System.currentTimeMillis());
+                location1.save();
+            }
+        };
+        mTimer.schedule(mTimerTask, 2000, 2000);
+        Toast.makeText(MainActivity.this,"Start Add Data",Toast.LENGTH_SHORT).show();
+    }
+
+    private void timerEnd(){
+        mTimer.cancel();
+        Toast.makeText(MainActivity.this,"End Add Data",Toast.LENGTH_SHORT).show();
+    }
 
     private boolean isSameProvider(String provider1 , String provider2){
         if(provider1 == null){
             return provider2 == null;
         }
         return provider1.equals(provider2);
+    }
+
+    private void startLoc(){
+        //获得位置管理器的实例
+        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        List<String> providers = locationManager.getProviders(true);
+
+        if(providers.contains(LocationManager.NETWORK_PROVIDER)){
+
+        }else if(providers.contains(LocationManager.GPS_PROVIDER)){
+
+        }else {
+            Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+            startActivityForResult(intent,0);
+        }
+
+        if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
+                .ACCESS_FINE_LOCATION) !=
+                PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
+                .ACCESS_COARSE_LOCATION) !=
+                PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        if(activeNetInfo != null && activeNetInfo.isAvailable()){
+            currentBestLocation = locationManager.getLastKnownLocation(NETWORK_PROVIDER);
+
+            locationManager.requestLocationUpdates(NETWORK_PROVIDER, 0, 0, networkListener);
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, minTime, 0,
+                    gpsListener);
+            Log.d("MainActivity","time is " + "1");
+            Toast.makeText(MainActivity.this,"监听",Toast.LENGTH_SHORT).show();
+            //Toast.makeText(MainActivity.this,"网络无连接",Toast.LENGTH_SHORT).show();
+            //Toast.makeText(MainActivity.this,"网络无连接",Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void send(){
+        String inputText = editText.getText().toString();
+        minTime = Long.parseLong(inputText) * 1000;
+        Toast.makeText(MainActivity.this,"时间间隔：" + inputText + "秒",Toast.LENGTH_SHORT).show();
+        editText.setText(null);
+    }
+
+    public String getSDPath(){
+
+        fileName = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                .getPath();
+        File dir = new File(fileName);
+        if(dir.exists()){
+            //Toast.makeText(MainActivity.this,"保存成功",Toast.LENGTH_SHORT).show();
+            return dir.toString();
+        }else{
+            dir.mkdirs();
+            //Toast.makeText(MainActivity.this,"保存路径不存在",Toast.LENGTH_SHORT).show();
+            return dir.toString();
+        }
+    }
+
+    private void saveData(ArrayList<LocationData> mylist){
+
+        ArrayList<Data> datalist = (ArrayList<Data>) DataSupport.findAll(Data.class);
+        for(Data dalist : datalist){
+            count = dalist.getFlag();
+        }
+
+        //Toast.makeText(MainActivity.this,count+"",Toast.LENGTH_SHORT).show();
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        ArrayList<LocationData> list = mylist;
+        int temp = count ;
+        if(list != null && list.size() > 0){
+
+            for(int i = temp ; i < list.size() ; ++i){
+                ++count;
+                LocationData location = list.get(i);
+                latitude = location.getLatitude();
+                longitude = location.getLongitude();
+                loctype = location.getLoctype();
+                accuracy = location.getAccuracy();
+                dateStr = dateFormat.format(location.getTimestamp());
+                st.writeToExcel(latitude,longitude,loctype,accuracy,dateStr);
+            }
+
+    }else{
+        Toast.makeText(MainActivity.this,"The list is Null",Toast.LENGTH_SHORT).show();
+    }
+    data = new Data();
+    data.setFlag(count);
+        data.save();
     }
 
     private boolean isBetterLocation(Location location , Location currentBestLocation){
@@ -479,5 +571,7 @@ public class MainActivity extends AppCompatActivity{
                     Toast.makeText(MainActivity.this,"GPS服务丢失1，切换至网络定位",Toast.LENGTH_SHORT).show();
                 }
             };
+
+
 }
 
