@@ -1,7 +1,6 @@
 package com.example.lxy.test;
 
 import android.app.Activity;
-import android.widget.Toast;
 
 import java.io.File;
 
@@ -21,9 +20,11 @@ public class SaveToExcelUtil {
     private File excelFile ;
     private Activity activity ;
     private int row;
-    public SaveToExcelUtil(Activity activity , String excelPath){
+
+    public SaveToExcelUtil(Activity activity , String excelPath ){
         this.excelPath = excelPath ;
         this.activity = activity;
+
         excelFile = new File(excelPath);
         createExcel(excelFile);
     }
@@ -33,22 +34,24 @@ public class SaveToExcelUtil {
 
         try{
             if(!file.exists()){
-                wwb = Workbook.createWorkbook(file);
-                ws = wwb.createSheet("sheet1",0);
-                Label lbl1 = new Label(0,0,"纬度");
-                Label lbl2 = new Label(1,0,"经度");
-                Label lbl3 = new Label(2,0,"定位方式");
-                Label lbl4 = new Label(3,0,"精度");
-                Label lbl5 = new Label(4,0,"时间戳");
 
-                ws.addCell(lbl1);
-                ws.addCell(lbl2);
-                ws.addCell(lbl3);
-                ws.addCell(lbl4);
-                ws.addCell(lbl5);
+                    wwb = Workbook.createWorkbook(file);
+                    ws = wwb.createSheet("sheet",0);
+                    Label lbl1 = new Label(0,0,"纬度");
+                    Label lbl2 = new Label(1,0,"经度");
+                    Label lbl3 = new Label(2,0,"定位方式");
+                    Label lbl4 = new Label(3,0,"精度");
+                    Label lbl5 = new Label(4,0,"时间戳");
 
-                wwb.write();
-                wwb.close();
+                    ws.addCell(lbl1);
+                    ws.addCell(lbl2);
+                    ws.addCell(lbl3);
+                    ws.addCell(lbl4);
+                    ws.addCell(lbl5);
+
+                    wwb.write();
+                    wwb.close();
+
             }
 
             }catch (Exception e){
@@ -62,7 +65,7 @@ public void writeToExcel(Object...args){
         Workbook oldWwb = Workbook.getWorkbook(excelFile);
         wwb = Workbook.createWorkbook(excelFile,oldWwb);
         WritableSheet ws = wwb.getSheet(0);
-        row = ws.getRows();
+        row = ws.getRows() ;
         Label lab1 = new Label(0,row,args[0]+"");
         Label lab2 = new Label(1,row,args[1]+"");
         Label lab3 = new Label(2,row,args[2]+"");
@@ -76,7 +79,7 @@ public void writeToExcel(Object...args){
 
         wwb.write();
         wwb.close();
-        Toast.makeText(activity,"保存",Toast.LENGTH_SHORT).show();
+
     }catch (Exception e){
         e.printStackTrace();
     }
