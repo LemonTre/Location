@@ -6,15 +6,19 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.location.GpsSatellite;
+import android.location.GpsStatus;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.location.LocationProvider;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
 import android.provider.Settings;
-import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -26,8 +30,10 @@ import android.widget.Toast;
 import org.litepal.crud.DataSupport;
 
 import java.io.File;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -38,18 +44,20 @@ import static android.location.LocationManager.NETWORK_PROVIDER;
 public class MainActivity extends AppCompatActivity implements View.OnClickListener{
 
     private int gpsTonet = 0 ;
+    //private int isStar = 0 ;
     private int flag1 = 0 ;
     private int flag2 = 0 ;
     private static final int TWO_MINUTES = 1000 * 60 * 2;
     private Timer mTimer;
-    private Timer mTimer1;
-    private TimerTask mTimerTask,mTimerTask1;
+    private  Timer mTimer1 = null;
+    private  Timer mTimer2 = null;
+    private TimerTask mTimerTask,mTimerTask1 ,mTimerTask2;
     private Location currentBestLocation;
     private LocationManager locationManager ;
 
     private String locationProvider;
     private EditText editText;
-    private long minTime = 2000;
+    private long minTime = 4000;
     private ConnectivityManager connManager;
     private NetworkInfo activeNetInfo = null;
     private BroadcastReceiver mReceiver = null;
@@ -63,14 +71,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private float accuracy;
     private String dateStr;
     private String fName;
-    //private int isFirst = 1 ;
 
+    private static final int MY_PERMISSIONS_REQUEST = 1;
     private SimpleDateFormat date = new SimpleDateFormat("HHmm");
 
     private int count = 0 ;
     private Data data ;
+    private int isGpsOk = 0 ;
+    private int isRemoveNet = 0 ;
 
-    private static final int MY_PERMISSIONS_REQUEST = 1;
     @Override
     protected void onDestroy(){
         super.onDestroy();
@@ -92,8 +101,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //startLoc();
-
         //注册网络监听
         filter = new IntentFilter();
         filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
@@ -105,7 +112,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 connManager = (ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
                 activeNetInfo = connManager.getActiveNetworkInfo();
                 if( activeNetInfo != null && activeNetInfo.isAvailable()){
-                    startLoc();
+                    boolean isInter = pingIpAddress();
+                    if(isInter){
+                        startLoc();
+                    }else{
+                        Toast.makeText(MainActivity.this,"未连接上网,请检查网络连接",Toast.LENGTH_SHORT).show();
+                    }
                     //Toast.makeText(MainActivity.this,"连接",Toast.LENGTH_SHORT).show();
                 } else{
                     Toast.makeText(MainActivity.this,"网络无连接，请开启网络连接",Toast.LENGTH_SHORT).show();
@@ -114,7 +126,24 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         };
 
-        registerReceiver(mReceiver,filter);
+        //运行权限
+        List<String> permissionList = new ArrayList<>();
+        if(ContextCompat.checkSelfPermission(MainActivity.this,Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED){
+            permissionList.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+        /*
+        if(ContextCompat.checkSelfPermission(MainActivity.this,Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED){
+            permissionList.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        }*/
+
+        if(!permissionList.isEmpty()){
+            String[] permissions = permissionList.toArray(new String[permissionList.size()]);
+            ActivityCompat.requestPermissions(MainActivity.this,permissions,1);
+        }else{
+            registerReceiver(mReceiver,filter);
+        }
 
         Button addData = (Button) findViewById(R.id.add_data);
         Button deleteData = (Button) findViewById(R.id.delete_data);
@@ -147,8 +176,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         });*/
     }
-
-
 
     //onCreate()结束
 
@@ -288,12 +315,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             currentBestLocation = locationManager.getLastKnownLocation(NETWORK_PROVIDER);
 
             locationManager.requestLocationUpdates(NETWORK_PROVIDER, 0, 0, networkListener);
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, minTime, 0,
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 12000 , 0,
                     gpsListener);
+            locationManager.addGpsStatusListener(statusListener);
             Toast.makeText(MainActivity.this,"监听",Toast.LENGTH_SHORT).show();
         }else{
-
         }
+
+        //检测GPS定位时的卫星数量
+
 
     }
 
@@ -328,7 +358,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void saveData (ArrayList<LocationData> mylist){
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        //File file = new File(excelPath);
 
         ArrayList<Data> datalist = (ArrayList<Data>) DataSupport.findAll(Data.class);
 
@@ -350,15 +379,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 accuracy = location.getAccuracy();
                 dateStr = dateFormat.format(location.getTimestamp());
                 if(ContextCompat.checkSelfPermission(this,Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED){
+                        != PackageManager.PERMISSION_GRANTED){
                     ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,Manifest.permission
-                .READ_EXTERNAL_STORAGE},MY_PERMISSIONS_REQUEST);
+                            new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,Manifest.permission
+                                    .READ_EXTERNAL_STORAGE},MY_PERMISSIONS_REQUEST);
                 }else {
                     st.writeToExcel(latitude, longitude, loctype, accuracy, dateStr);
-                    Toast.makeText(MainActivity.this,"导出成功",Toast.LENGTH_SHORT).show();
+                    //Toast.makeText(MainActivity.this,"导出成功",Toast.LENGTH_SHORT).show();
                 }
+               // st.writeToExcel(latitude, longitude, loctype, accuracy, dateStr);
             }
+            Toast.makeText(MainActivity.this,"导出成功",Toast.LENGTH_SHORT).show();
 
     }else{
         Toast.makeText(MainActivity.this,"The list is Null",Toast.LENGTH_SHORT).show();
@@ -370,10 +401,26 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     }
 
-
+    //判断网络是否连接上网
+    private boolean pingIpAddress(){
+        try{
+            Process process = Runtime.getRuntime().exec("ping -c 1 -w 1 www.baidu.com");
+            int status = process.waitFor();
+            if(status == 0){
+                return true;
+            }else{
+                return false;
+            }
+        }catch (IOException e){
+            e.printStackTrace();
+        }catch (InterruptedException e){
+            e.printStackTrace();
+        }
+        return false;
+    }
 
     private boolean isBetterLocation(Location location , Location currentBestLocation){
-        Toast.makeText(MainActivity.this,"比较。。",Toast.LENGTH_SHORT).show();
+        //Toast.makeText(MainActivity.this,"比较。。",Toast.LENGTH_SHORT).show();
         if(currentBestLocation == null){
             return true;
         }
@@ -403,7 +450,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void updateLocation(final Location location){
         //添加位置信息到数据库
-                if(location != null){
+                if(location != null && locationProvider != null){
                     LocationData location2 = new LocationData();
                     location2.setLatitude(location.getLatitude() + "");
                     location2.setLongitude(location.getLongitude() + "");
@@ -418,22 +465,28 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }
     }
     //network监听
+
+
      LocationListener networkListener =
             new LocationListener() {
                 @Override
                 public void onLocationChanged(Location location) {
-
-                    //if(flag1 == 1){
-                       // mTimer1.cancel();
-                       // flag1 = 0 ;
-                    //}else
-                    if(flag1 ==1 || flag2 == 2 ){
+                    isRemoveNet = 0 ;
+                    //isGpsOk = 0 ;
+                    if(flag1 == 1 || flag2 ==2){
                         if(mTimer1 != null){
-                            mTimer1.cancel();
-                        }
+                            if(flag1 == 1){
+                                Toast.makeText(MainActivity.this,"Net Cancel",Toast.LENGTH_SHORT).show();
+                            }else{
+                                Toast.makeText(MainActivity.this,"GPS Cancel",Toast.LENGTH_SHORT).show();
+                            }
 
+                            flag1 = flag2 = 0 ;
+                            mTimer1.cancel();
+
+                        }
                     }
-                    flag1 = 1 ;
+
  //                   Log.d("MainActivity","is :" + System.currentTimeMillis());
                     boolean flag = isBetterLocation(location,currentBestLocation);
                         if(flag || gpsTonet == 1){
@@ -441,6 +494,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                             if(activeNetInfo != null){
                                 Toast.makeText(MainActivity.this,"网络连接",Toast.LENGTH_SHORT).show();
                                 locationProvider = activeNetInfo.getTypeName();
+
                                 //if(activeNetInfo.getType() == ConnectivityManager.TYPE_WIFI){
                                  //locationProvider = WIFI_SERVICE;
                                  //}else if(activeNetInfo.getType() == ConnectivityManager.TYPE_MOBILE){
@@ -453,24 +507,30 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         gpsTonet = 0 ;
                         }
 
+                        final Handler handler = new Handler(){
+                            public void handleMessage(Message msg){
+                                if(msg.what == 1){
+                                    updateLocation(currentBestLocation);
+                                }
+                                super.handleMessage(msg);
+                            }
+                        };
                         mTimer1 = new Timer();
+                    Toast.makeText(MainActivity.this, "Net Timer", Toast.LENGTH_SHORT).show();
+                        flag1 = 1 ;
+                        //isNetOk = 1 ;
                         mTimerTask1 = new TimerTask() {
                             @Override
                             public void run() {
                                 //Log.d("MainActivity","time is " + "2");
-                                updateLocation(currentBestLocation);
+                                Message message = new Message();
+                                message.what = 1 ;
+                                handler.sendMessage(message);
+
                             }
                         };
 
                         mTimer1.schedule(mTimerTask1,0,minTime);
-
-
-
-
-                    //Log.d("MainActivity","is :" + currentBestLocation.getAccuracy());
-
-                    //Toast.makeText(MainActivity.this,"net",Toast.LENGTH_SHORT).show();
-                    //Log.d("MainActivity11","net: " + networkListener + "");
       }
 
                 @Override
@@ -518,47 +578,78 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 private boolean isRemove = false;
                 @Override
                 public void onLocationChanged(final Location location) {
-
-                    //if(flag2 == 1){
-                     //   mTimer1.cancel();
-                      //  flag2 = 0;
-                   // }else
+                    isRemoveNet = 0 ;
+                    //isGpsOk = 0 ;
                     if(flag2 == 2 || flag1 == 1){
+
                         if(mTimer1 != null){
                             mTimer1.cancel();
+                            if(flag1 == 1){
+                                Toast.makeText(MainActivity.this,"NetCancel",Toast.LENGTH_SHORT).show();
+                            }else {
+                                Toast.makeText(MainActivity.this,"GPSCancel",Toast.LENGTH_SHORT).show();
+                            }
+                            flag2 = flag1 = 0 ;
+
                         }
                     }
-                    flag2 = 2 ;
+
                     boolean flag = isBetterLocation(location,currentBestLocation);
-                        if(flag){
+
+                    if(flag){
+                            //Toast.makeText(MainActivity.this,"GPS",Toast.LENGTH_SHORT).show();
                             currentBestLocation = location;
                             locationProvider = LocationManager.GPS_PROVIDER;
                         }
+
                         if(location != null && !isRemove){
                             //flag1 = 2;
                             locationManager.removeUpdates(networkListener);
+                            isRemoveNet = 1 ;
                             Toast.makeText(MainActivity.this,"网络到GPS",Toast.LENGTH_SHORT).show();
                             isRemove = true;
                         }
+
+                       //updateLocation(currentBestLocation);
+                    if(isGpsOk == 1){
+                        final Handler handler = new Handler(){
+                            public void handleMessage(Message msg){
+                                if(msg.what == 2){
+                                    updateLocation(currentBestLocation);
+                                }
+                                super.handleMessage(msg);
+                            }
+                        };
                         mTimer1 = new Timer();
+                        Toast.makeText(MainActivity.this,"GPS Timer",Toast.LENGTH_SHORT).show();
+                        flag2 = 2 ;
                         mTimerTask1 = new TimerTask() {
                             @Override
                             public void run() {
                                 //Log.d("MainActivity","time is " + "3");
-                                updateLocation(currentBestLocation);
+
+                                Message message = new Message();
+                                message.what = 2 ;
+                                handler.sendMessage(message);
                             }
                         };
                         mTimer1.schedule(mTimerTask1,0,minTime);
+                    }
 
-                    Toast.makeText(MainActivity.this,"GPS",Toast.LENGTH_SHORT).show();
+
+
                     //Log.d("MainActivity11","GPS: " + gpsListener + "");
                 }
 
                 @Override
                 public void onStatusChanged(String provider, int status, Bundle extras) {
-                    /*
-                   if(LocationProvider.OUT_OF_SERVICE == status){
-                        Toast.makeText(MainActivity.this,"GPS服务丢失，切换至网络定位",Toast.LENGTH_SHORT).show();
+
+                    if(LocationProvider.AVAILABLE == status || LocationProvider.TEMPORARILY_UNAVAILABLE == status){
+                        //Toast.makeText(MainActivity.this,"可见",Toast.LENGTH_SHORT).show();
+                    }else{
+                        Toast.makeText(MainActivity.this,"GPS状态改变",Toast.LENGTH_SHORT).show();
+                        gpsTonet = 1;
+                        //flag2 = 1 ;
                         if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
                                 .ACCESS_FINE_LOCATION) !=
                                 PackageManager.PERMISSION_GRANTED
@@ -567,21 +658,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                                 PackageManager.PERMISSION_GRANTED) {
                             return;
                         }
-                        gpsTonet = 1;
-                       //Toast.makeText(MainActivity.this,"GPS服务丢失1，切换至网络定位",Toast.LENGTH_SHORT).show();
-                        locationManager.requestLocationUpdates(NETWORK_PROVIDER,0,0,networkListener);*/
+                        locationManager.requestLocationUpdates(NETWORK_PROVIDER, 0, 0, networkListener);
                     }
-
-
+                    }
 
                 @Override
                 public void onProviderEnabled(String provider) {
+                    Toast.makeText(MainActivity.this,"GPS位置服务开启",Toast.LENGTH_SHORT).show();
                 }
 
                 @Override
                 public void onProviderDisabled(String provider) {
-
-
+                    Toast.makeText(MainActivity.this,"GPS位置服务已关闭，切换到网络定位",Toast.LENGTH_SHORT).show();
+                    gpsTonet = 1;
                     if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
                             .ACCESS_FINE_LOCATION) !=
                             PackageManager.PERMISSION_GRANTED
@@ -590,25 +679,98 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                             PackageManager.PERMISSION_GRANTED) {
                         return;
                     }
-                    gpsTonet = 1;
-                    //flag2 = 1 ;
                     locationManager.requestLocationUpdates(NETWORK_PROVIDER, 0, 0, networkListener);
-                    Toast.makeText(MainActivity.this,"GPS服务丢失1，切换至网络定位",Toast.LENGTH_SHORT).show();
                 }
             };
 
 
-     public void onRequestPermissionResult(int requestCode, @NonNull String[] permissions , @NonNull int[]
+     public void onRequestPermissionsResult(int requestCode,  String[] permissions ,  int[]
                                            grantResults) {
-        if (requestCode == MY_PERMISSIONS_REQUEST) {
-            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                st.writeToExcel(latitude, longitude, loctype, accuracy, dateStr);
-            } else {
-                Toast.makeText(MainActivity.this, "Permission Denied", Toast.LENGTH_SHORT).show();
+         switch (requestCode){
+             case 1:
+                 if(grantResults.length > 0 ){
+                     for (int result : grantResults){
+                         if(result != PackageManager.PERMISSION_GRANTED){
+                             Toast.makeText(this,"必须同意所有权限才能使用本程序",Toast.LENGTH_SHORT).show();
+                             finish();
+                             return;
+                         }
+                     }
+                     registerReceiver(mReceiver,filter);
+                 }else{
+                     Toast.makeText(this,"发生未知错误",Toast.LENGTH_SHORT).show();
+                     finish();
+                 }
+                 break;
+             default:
+         }
+    }
+
+   // private List<GpsSatellite> numSatelliteList = new ArrayList<GpsSatellite>();
+
+    private final GpsStatus.Listener statusListener = new GpsStatus.Listener(){
+        public void onGpsStatusChanged(int event){
+            LocationManager locationManager = (LocationManager) MainActivity.this.getSystemService(Context
+            .LOCATION_SERVICE);
+
+            if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
+                    .ACCESS_FINE_LOCATION) !=
+                    PackageManager.PERMISSION_GRANTED
+                    && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
+                    .ACCESS_COARSE_LOCATION) !=
+                    PackageManager.PERMISSION_GRANTED) {
+                return;
             }
-            return;
+
+            GpsStatus status = locationManager.getGpsStatus(null);
+            updateGpsStatus(event ,status);
         }
-        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+    };
+
+    private void updateGpsStatus(int event , GpsStatus status){
+
+        if(event == GpsStatus.GPS_EVENT_SATELLITE_STATUS){
+            int maxSatellites = status.getMaxSatellites();
+            Iterator<GpsSatellite> it = status.getSatellites().iterator();
+            //numSatelliteList.clear();
+            int count = 0 ;
+            while(it.hasNext() && count <= maxSatellites){
+                count++;
+                if(count <= 4){
+                    //isStar = 1;
+                    gpsTonet = 0 ;
+                    if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
+                            .ACCESS_FINE_LOCATION) !=
+                            PackageManager.PERMISSION_GRANTED
+                            && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
+                            .ACCESS_COARSE_LOCATION) !=
+                            PackageManager.PERMISSION_GRANTED) {
+                        return;
+                    }
+
+                    //flag1 = 1 ;
+                    //isNetOk = 1 ;
+                    /*
+                    if(flag1 == 1){
+                        if(mTimer1 != null){
+                            mTimer1.cancel();
+                        }
+                    }*/
+                    isGpsOk = 0 ;
+                    //Toast.makeText(MainActivity.this,"GPS定位星数太少，切换至网络定位 " ,Toast.LENGTH_SHORT).show();
+                    if(isRemoveNet == 1){
+                        locationManager.requestLocationUpdates(NETWORK_PROVIDER, 0, 0, networkListener);
+                    }
+                }else{
+                    isGpsOk = 1 ;
+                    //Toast.makeText(MainActivity.this,"GPS定位 " ,Toast.LENGTH_SHORT).show();
+                }
+                //Toast.makeText(MainActivity.this,"找到星",Toast.LENGTH_SHORT).show();
+
+            }
+        }else if(status == null){
+            Toast.makeText(MainActivity.this,"星的个数: 0" + count ,Toast.LENGTH_SHORT).show();
+        }
     }
 }
 
