@@ -48,10 +48,11 @@ public class LocationData extends DataSupport implements Parcelable{
         this.longitude = longitude;
     }
 
-    public String getLoctype(){
+    public String getLoctype() {
         return loctype;
     }
-    public void setLoctype(String loctype){
+
+    public void setLoctype(String loctype) {
         this.loctype = loctype;
     }
 

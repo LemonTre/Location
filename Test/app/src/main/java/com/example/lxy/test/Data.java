@@ -8,7 +8,7 @@ import org.litepal.crud.DataSupport;
 
 public class Data extends DataSupport{
     private int flag ;
-    //private String fName;
+    //private String time;
 
     public int getFlag() {
         return flag;
@@ -18,7 +18,16 @@ public class Data extends DataSupport{
         this.flag = flag;
     }
 
-    /*
+/*
+    public String getTime() {
+        return time;
+    }
+
+    public void setTime(String time) {
+        this.time = time;
+    }
+
+
     public String getfName() {
         return fName;
     }

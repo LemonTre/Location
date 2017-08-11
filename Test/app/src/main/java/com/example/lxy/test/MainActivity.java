@@ -16,15 +16,19 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.Handler;
-import android.os.Message;
 import android.provider.Settings;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.litepal.crud.DataSupport;
@@ -37,6 +41,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static android.location.LocationManager.NETWORK_PROVIDER;
 
@@ -57,10 +64,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private String locationProvider;
     private EditText editText;
-    private long minTime = 4000;
+
+    private long minTime ;
+    String time ;
+
     private ConnectivityManager connManager;
     private NetworkInfo activeNetInfo = null;
     private BroadcastReceiver mReceiver = null;
+
+    //public MsgReceiver msgReceiver ;
+    public static String SERVICE_RECEIVER = "com.receiver";
+    private Intent intentOk ;
+
     private IntentFilter filter;
     private String fileName ;
     private String excelPath ;
@@ -71,18 +86,29 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private float accuracy;
     private String dateStr;
     private String fName;
+    //private Intent intent2 ;
 
     private static final int MY_PERMISSIONS_REQUEST = 1;
     private SimpleDateFormat date = new SimpleDateFormat("HHmm");
 
     private int count = 0 ;
     private Data data ;
-    private int isGpsOk = 0 ;
+    private Time isTime ;
+    //private int isGpsOk = 0 ;
     private int isRemoveNet = 0 ;
+
+    //下拉菜单的实现
+    private List<String> list = new ArrayList<>();
+    private TextView myTextView ;
+    private Spinner mySpinner ;
+    private ArrayAdapter<String> adapter ;
+
+    private ScheduledExecutorService service ;
 
     @Override
     protected void onDestroy(){
         super.onDestroy();
+
         try{
 
             locationManager.removeUpdates(networkListener);
@@ -94,6 +120,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if(mTimer1 != null){
             mTimer1.cancel();
         }
+
+        stopService(intentOk);
+        //unregisterReceiver(msgReceiver);
     }
 
     @Override
@@ -114,8 +143,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 if( activeNetInfo != null && activeNetInfo.isAvailable()){
                     boolean isInter = pingIpAddress();
                     if(isInter){
-                        startLoc();
+                        Toast.makeText(MainActivity.this,"请选择时间间隔！",Toast.LENGTH_SHORT).show();
+                        menu();
+                        //startLoc();
                     }else{
+
+                       // tr/y{
+                            //locationManager.removeUpdates(networkListener);
+                            //locationManager.removeUpdates(gpsListener);
+                        //}c/atch (Exception e){
+                            //e.printStackTrace();
+                        //}
+
+                        //minTime = 1000 * 100 ;
                         Toast.makeText(MainActivity.this,"未连接上网,请检查网络连接",Toast.LENGTH_SHORT).show();
                     }
                     //Toast.makeText(MainActivity.this,"连接",Toast.LENGTH_SHORT).show();
@@ -126,18 +166,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         };
 
+
+
         //运行权限
-        List<String> permissionList = new ArrayList<>();
+        List<String> permissionList  = new ArrayList<>();
         if(ContextCompat.checkSelfPermission(MainActivity.this,Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED){
             permissionList.add(Manifest.permission.ACCESS_FINE_LOCATION);
         }
-        /*
         if(ContextCompat.checkSelfPermission(MainActivity.this,Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED){
             permissionList.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-        }*/
-
+        }
         if(!permissionList.isEmpty()){
             String[] permissions = permissionList.toArray(new String[permissionList.size()]);
             ActivityCompat.requestPermissions(MainActivity.this,permissions,1);
@@ -151,10 +191,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Button timerStart = (Button) findViewById(R.id.timer_start);
         Button timerEnd = (Button) findViewById(R.id.timer_end);
         Button startLoc = (Button) findViewById(R.id.start_loc);
-        Button send = (Button) findViewById(R.id.finish);
+        //Button send = (Button) findViewById(R.id.finish);
         Button exportData = (Button) findViewById(R.id.export_data);
 
-        editText = (EditText) findViewById(R.id.edit_text);
+        //editText = (EditText) findViewById(R.id.edit_text);
 
 
         addData.setOnClickListener(this);
@@ -163,7 +203,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         timerStart.setOnClickListener(this);
         timerEnd.setOnClickListener(this);
         startLoc.setOnClickListener(this);
-        send.setOnClickListener(this);
+        //send.setOnClickListener(this);
         exportData.setOnClickListener(this);
 
 
@@ -178,6 +218,89 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     //onCreate()结束
+
+    public void menu(){
+        list.add("请选择！");
+        list.add("2");
+        list.add("5");
+        list.add("10");
+
+        myTextView = (TextView) findViewById(R.id.TextView_time);
+        mySpinner = (Spinner) findViewById(R.id.Spinner_time);
+
+        adapter = new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,list);
+
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+
+        mySpinner.setAdapter(adapter);
+
+        mySpinner.setOnItemSelectedListener(new Spinner.OnItemSelectedListener(){
+
+
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String myTime = adapter.getItem(position);
+                if(service != null) {
+                    service.shutdownNow();
+                }
+                switch (myTime){
+                    case "2":
+                        minTime = Long.valueOf(myTime) * 1000;
+                        Toast.makeText(MainActivity.this,"时间间隔确定！",Toast.LENGTH_SHORT).show();
+                        startLoc();
+                        break;
+                    case "5":
+                        minTime = Long.valueOf(myTime) * 1000;
+                        Toast.makeText(MainActivity.this,"时间间隔确定！",Toast.LENGTH_SHORT).show();
+                        startLoc();
+                        break;
+                    case "10":
+                        minTime = Long.valueOf(myTime) * 1000;
+                        Toast.makeText(MainActivity.this,"时间间隔确定！" ,Toast.LENGTH_SHORT).show();
+                        startLoc();
+                        break;
+                    default:
+                }
+
+                myTextView.setText("您选择的时间间隔是(秒)：");
+                parent.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                //Toast.makeText(MainActivity.this,"2",Toast.LENGTH_SHORT).show();
+                myTextView.setText("NONE");
+                parent.setVisibility(View.VISIBLE);
+            }
+        });
+
+        mySpinner.setOnTouchListener(new Spinner.OnTouchListener(){
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                //Toast.makeText(MainActivity.this,"3",Toast.LENGTH_SHORT).show();
+                return false;
+            }
+        });
+
+        mySpinner.setOnFocusChangeListener(new Spinner.OnFocusChangeListener(){
+
+            @Override
+            public void onFocusChange(View v, boolean hasFocus) {
+                //Toast.makeText(MainActivity.this,"4",Toast.LENGTH_SHORT).show();
+            }
+        });
+
+    }
+/*
+    public class MsgReceiver extends BroadcastReceiver{
+        @Override
+        public void onReceive(Context context , Intent intent){
+
+            updateLocation(currentBestLocation);
+
+        }
+    }*/
 
     @Override
     public void onClick(View v){
@@ -200,10 +323,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.start_loc:
                 //startLoc();
                 break;
-            case R.id.finish:
-                send();
-                break;
+            //case R.id.finish:
+                //send();
+                //break;
             case R.id.export_data:
+
+                //minTime = 4000;
+                isTime = new Time();
+                isTime.setTime(minTime + "");
+                isTime.save();
+
                 fName = date.format(System.currentTimeMillis());
                 excelPath = getSDPath() + File.separator+ "demo" + fName + ".xls"  ;
                 st = new SaveToExcelUtil(this,excelPath);
@@ -243,6 +372,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void deleteData(){
         DataSupport.deleteAll(LocationData.class);
+
         data = new Data();
         data.setFlag(0);
         data.save();
@@ -298,43 +428,80 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }else if(providers.contains(LocationManager.GPS_PROVIDER)){
 
         }else {
-            Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-            startActivityForResult(intent,0);
+            Intent intent1 = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+            startActivityForResult(intent1,0);
         }
 
-        if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
-                .ACCESS_FINE_LOCATION) !=
-                PackageManager.PERMISSION_GRANTED
-                && ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission
-                .ACCESS_COARSE_LOCATION) !=
-                PackageManager.PERMISSION_GRANTED) {
+        if(ContextCompat.checkSelfPermission(this,Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED){
             return;
-        }
-
-        if(activeNetInfo != null && activeNetInfo.isAvailable()){
-            currentBestLocation = locationManager.getLastKnownLocation(NETWORK_PROVIDER);
-
-            locationManager.requestLocationUpdates(NETWORK_PROVIDER, 0, 0, networkListener);
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 12000 , 0,
-                    gpsListener);
-            locationManager.addGpsStatusListener(statusListener);
-            Toast.makeText(MainActivity.this,"监听",Toast.LENGTH_SHORT).show();
+            //ActivityCompat.requestPermissions(this,
+                    //new String[]{Manifest.permission.ACCESS_FINE_LOCATION},MY_PERMISSIONS_REQUEST);
         }else{
+            if(activeNetInfo != null && activeNetInfo.isAvailable()){
+
+                currentBestLocation = locationManager.getLastKnownLocation(NETWORK_PROVIDER);
+
+                locationManager.requestLocationUpdates(NETWORK_PROVIDER, 0, 0, networkListener);
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 12000 , 0,
+                        gpsListener);
+                locationManager.addGpsStatusListener(statusListener);
+
+
+                    service = Executors
+                            .newSingleThreadScheduledExecutor();
+                    service.scheduleAtFixedRate(getLogginDmsRunner(),0,minTime, TimeUnit.MILLISECONDS);
+
+                    /*if (msgReceiver == null) {
+                        msgReceiver = new MsgReceiver();
+                        IntentFilter intentFilter = new IntentFilter();
+                        intentFilter.addAction(SERVICE_RECEIVER);
+                        registerReceiver(msgReceiver,intentFilter);
+
+                        intentOk = new Intent(MainActivity.this,MyService.class);
+
+                        startService(intentOk);
+                    }*/
+
+                Toast.makeText(MainActivity.this,"监听",Toast.LENGTH_SHORT).show();
+            }else{
+            }
         }
+
+
 
         //检测GPS定位时的卫星数量
 
 
     }
 
+    private Runnable getLogginDmsRunner(){
+        return new Runnable() {
+            @Override
+            public void run() {
+                Log.d("My","this is + ");
+                //Intent intent = new Intent(SERVICE_RECEIVER);
+                updateLocation(currentBestLocation);
+                //data2[0].getLong("time");
+                //minTime[0] = intent.getLongExtra("time",0);
+
+                //getApplicationContext().sendBroadcast(intent);
+            }
+        };
+    }
     private void send(){
         String inputText = editText.getText().toString();
+        isTime = new Time();
         //Toast.makeText(MainActivity.this,"时间间隔：" +inputText  + "秒",Toast.LENGTH_SHORT).show();
         if(editText.length() == 0){
-            minTime = 2000;
-            Toast.makeText(MainActivity.this,"默认时间间隔：" + 2 + "秒",Toast.LENGTH_SHORT).show();
+            minTime = 4000;
+            isTime.setTime(minTime + "");
+            isTime.save();
+            Toast.makeText(MainActivity.this,"默认时间间隔：" + 4 + "秒",Toast.LENGTH_SHORT).show();
         }else{
             minTime = Long.parseLong(inputText) * 1000;
+            isTime.setTime(minTime + "");
+            isTime.save();
             Toast.makeText(MainActivity.this,"时间间隔：" + inputText + "秒",Toast.LENGTH_SHORT).show();
         }
 
@@ -363,7 +530,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         for(Data dalist : datalist){
             count = dalist.getFlag();
-
         }
 
         ArrayList<LocationData> list = mylist;
@@ -378,15 +544,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 loctype = location.getLoctype();
                 accuracy = location.getAccuracy();
                 dateStr = dateFormat.format(location.getTimestamp());
-                if(ContextCompat.checkSelfPermission(this,Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                        != PackageManager.PERMISSION_GRANTED){
-                    ActivityCompat.requestPermissions(this,
-                            new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,Manifest.permission
-                                    .READ_EXTERNAL_STORAGE},MY_PERMISSIONS_REQUEST);
-                }else {
+                //if(ContextCompat.checkSelfPermission(this,Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                       // != PackageManager.PERMISSION_GRANTED){
+                    //ActivityCompat.requestPermissions(this,
+                           // new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},MY_PERMISSIONS_REQUEST);
+                //}else {
                     st.writeToExcel(latitude, longitude, loctype, accuracy, dateStr);
                     //Toast.makeText(MainActivity.this,"导出成功",Toast.LENGTH_SHORT).show();
-                }
+                //}
                // st.writeToExcel(latitude, longitude, loctype, accuracy, dateStr);
             }
             Toast.makeText(MainActivity.this,"导出成功",Toast.LENGTH_SHORT).show();
@@ -473,19 +638,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 public void onLocationChanged(Location location) {
                     isRemoveNet = 0 ;
                     //isGpsOk = 0 ;
-                    if(flag1 == 1 || flag2 ==2){
-                        if(mTimer1 != null){
-                            if(flag1 == 1){
-                                Toast.makeText(MainActivity.this,"Net Cancel",Toast.LENGTH_SHORT).show();
-                            }else{
-                                Toast.makeText(MainActivity.this,"GPS Cancel",Toast.LENGTH_SHORT).show();
-                            }
 
-                            flag1 = flag2 = 0 ;
-                            mTimer1.cancel();
 
-                        }
-                    }
 
  //                   Log.d("MainActivity","is :" + System.currentTimeMillis());
                     boolean flag = isBetterLocation(location,currentBestLocation);
@@ -507,6 +661,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         gpsTonet = 0 ;
                         }
 
+
+
+
+                    //Log.d("My","this is " + currentBestLocation.getLongitude());
+                    /*intent = getIntent();
+                    String temp1 = null ;
+                    temp1 = intent.getStringExtra("status");
+                    if(temp1.equals("Ok")){
+                        updateLocation(currentBestLocation);
+                    }
+                    Log.d("My","this is " + temp1);
+
+
                         final Handler handler = new Handler(){
                             public void handleMessage(Message msg){
                                 if(msg.what == 1){
@@ -515,6 +682,22 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                                 super.handleMessage(msg);
                             }
                         };
+
+
+                    if(flag1 == 1 || flag2 ==2){
+                        if(mTimer1 != null){
+                            if(flag1 == 1){
+                                Toast.makeText(MainActivity.this,"Net Cancel",Toast.LENGTH_SHORT).show();
+                            }else{
+                                Toast.makeText(MainActivity.this,"GPS Cancel",Toast.LENGTH_SHORT).show();
+                            }
+
+                            flag1 = flag2 = 0 ;
+                            mTimer1.cancel();
+
+                        }
+                    }
+
                         mTimer1 = new Timer();
                     Toast.makeText(MainActivity.this, "Net Timer", Toast.LENGTH_SHORT).show();
                         flag1 = 1 ;
@@ -530,7 +713,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                             }
                         };
 
-                        mTimer1.schedule(mTimerTask1,0,minTime);
+                        mTimer1.schedule(mTimerTask1,0,minTime);*/
       }
 
                 @Override
@@ -578,22 +761,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 private boolean isRemove = false;
                 @Override
                 public void onLocationChanged(final Location location) {
-                    isRemoveNet = 0 ;
-                    //isGpsOk = 0 ;
-                    if(flag2 == 2 || flag1 == 1){
-
-                        if(mTimer1 != null){
-                            mTimer1.cancel();
-                            if(flag1 == 1){
-                                Toast.makeText(MainActivity.this,"NetCancel",Toast.LENGTH_SHORT).show();
-                            }else {
-                                Toast.makeText(MainActivity.this,"GPSCancel",Toast.LENGTH_SHORT).show();
-                            }
-                            flag2 = flag1 = 0 ;
-
-                        }
+                    if(!isRemove){
+                        isRemoveNet = 0 ;
                     }
-
+                    //isGpsOk = 0 ;
                     boolean flag = isBetterLocation(location,currentBestLocation);
 
                     if(flag){
@@ -611,7 +782,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         }
 
                        //updateLocation(currentBestLocation);
-                    if(isGpsOk == 1){
+                     //if(isGpsOk == 1){
+                       /* Intent intent = getIntent();
+                        String temp = null ;
+                        temp = intent.getStringExtra("status");
+                        if(temp.equals("Ok")){
+                            updateLocation(currentBestLocation);
+                        }
+
+
                         final Handler handler = new Handler(){
                             public void handleMessage(Message msg){
                                 if(msg.what == 2){
@@ -620,6 +799,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                                 super.handleMessage(msg);
                             }
                         };
+
+
+                        if(flag2 == 2 || flag1 == 1){
+
+                            if(mTimer1 != null){
+                                mTimer1.cancel();
+                                if(flag1 == 1){
+                                    Toast.makeText(MainActivity.this,"NetCancel",Toast.LENGTH_SHORT).show();
+                                }else {
+                                    Toast.makeText(MainActivity.this,"GPSCancel",Toast.LENGTH_SHORT).show();
+                                }
+                                flag2 = flag1 = 0 ;
+
+                            }
+                        }
                         mTimer1 = new Timer();
                         Toast.makeText(MainActivity.this,"GPS Timer",Toast.LENGTH_SHORT).show();
                         flag2 = 2 ;
@@ -633,8 +827,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                                 handler.sendMessage(message);
                             }
                         };
-                        mTimer1.schedule(mTimerTask1,0,minTime);
-                    }
+                        mTimer1.schedule(mTimerTask1,0,minTime);*/
+                    //}
 
 
 
@@ -688,22 +882,27 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                                            grantResults) {
          switch (requestCode){
              case 1:
-                 if(grantResults.length > 0 ){
+                 if(grantResults.length > 0){
                      for (int result : grantResults){
                          if(result != PackageManager.PERMISSION_GRANTED){
-                             Toast.makeText(this,"必须同意所有权限才能使用本程序",Toast.LENGTH_SHORT).show();
+                             Toast.makeText(MainActivity.this,"必须同意所有权限才能使用本程序",Toast.LENGTH_SHORT).show();
                              finish();
                              return;
                          }
                      }
                      registerReceiver(mReceiver,filter);
                  }else{
-                     Toast.makeText(this,"发生未知错误",Toast.LENGTH_SHORT).show();
                      finish();
                  }
                  break;
              default:
          }
+        /*super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+         if(requestCode == MY_PERMISSIONS_REQUEST){
+             //Toast.makeText(MainActivity.this, "权限申请成功", Toast.LENGTH_SHORT).show();
+         }else{
+             //Toast.makeText(MainActivity.this, "权限申请失败", Toast.LENGTH_SHORT).show();
+         }*/
     }
 
    // private List<GpsSatellite> numSatelliteList = new ArrayList<GpsSatellite>();
@@ -736,6 +935,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             int count = 0 ;
             while(it.hasNext() && count <= maxSatellites){
                 count++;
+
                 if(count <= 4){
                     //isStar = 1;
                     gpsTonet = 0 ;
@@ -756,13 +956,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                             mTimer1.cancel();
                         }
                     }*/
-                    isGpsOk = 0 ;
+                    //isGpsOk = 0 ;
                     //Toast.makeText(MainActivity.this,"GPS定位星数太少，切换至网络定位 " ,Toast.LENGTH_SHORT).show();
                     if(isRemoveNet == 1){
                         locationManager.requestLocationUpdates(NETWORK_PROVIDER, 0, 0, networkListener);
                     }
                 }else{
-                    isGpsOk = 1 ;
+                    //isGpsOk = 1 ;
                     //Toast.makeText(MainActivity.this,"GPS定位 " ,Toast.LENGTH_SHORT).show();
                 }
                 //Toast.makeText(MainActivity.this,"找到星",Toast.LENGTH_SHORT).show();
@@ -773,4 +973,5 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 }
+
 

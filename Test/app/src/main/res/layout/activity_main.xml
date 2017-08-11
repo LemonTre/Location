@@ -3,15 +3,8 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
-
-    <Button
-        android:id="@+id/add_data"
-        android:textAllCaps="false"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:text="Add Data"/>
+    android:layout_height="match_parent"
+    android:weightSum="1">
 
     <Button
         android:id="@+id/delete_data"
@@ -30,8 +23,27 @@
         android:text="Query Data"/>
 
     <Button
+        android:id="@+id/export_data"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAllCaps="false"
+        android:text="Export Data"/>
+
+
+    <Button
+        android:id="@+id/add_data"
+        android:textAllCaps="false"
+        android:enabled="false"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:text="Add Data"/>
+
+
+    <Button
         android:id="@+id/timer_start"
         android:textAllCaps="false"
+        android:enabled="false"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
@@ -40,6 +52,7 @@
     <Button
         android:id="@+id/timer_end"
         android:textAllCaps="false"
+        android:enabled="false"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
@@ -48,34 +61,28 @@
     <Button
         android:id="@+id/start_loc"
         android:textAllCaps="false"
+        android:enabled="false"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Start Loc"/>
 
-    <Button
-        android:id="@+id/export_data"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textAllCaps="false"
-        android:text="Export Data"/>
-
-
     <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="164dp"
         android:orientation="horizontal"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:weightSum="1">
 
-        <EditText
-            android:id="@+id/edit_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="请输入定位时间间隔(秒)"/>
-        <Button
-            android:id="@+id/finish"
+        <TextView
+            android:id="@+id/TextView_time"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="确定"/>
+            android:text="您选择的时间间隔是(秒)："/>
+
+        <Spinner
+            android:id="@+id/Spinner_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+        </Spinner>
 
     </LinearLayout>
 
