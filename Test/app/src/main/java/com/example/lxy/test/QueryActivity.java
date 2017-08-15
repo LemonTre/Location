@@ -28,14 +28,15 @@ public class QueryActivity extends AppCompatActivity {
         str = new String[list.size()];
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         String dateStr;
+        int j = 0 ;
 
         if(list != null && list.size() > 0){
 
-            for(int i = 0 ; i < list.size() ; ++i){
+            for(int i = list.size() - 1 ; i >= 0 ; --i){
 
                 LocationData location = list.get(i);
                 dateStr = dateFormat.format(location.getTimestamp());
-                str[i] = "纬度：" + location.getLatitude() + "\n"  +
+                str[j++] = "纬度：" + location.getLatitude() + "\n"  +
                         "经度： " + location.getLongitude() + "\n" +
                         "定位方式： " + location.getLoctype() + "\n" +
                         "精度(米)： " + location.getAccuracy() + "\n" +

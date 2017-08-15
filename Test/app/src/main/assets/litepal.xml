@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <litepal>
     <dbname value="LocationStore"></dbname>
-    <version value="4"></version>
+    <version value="5"></version>
 
     <list>
             <mapping class="com.example.lxy.test.LocationData"></mapping>
             <mapping class="com.example.lxy.test.Data"></mapping>
-        <mapping class="com.example.lxy.test.Time"></mapping>
     </list>
 <storage value = "external"/>
 
