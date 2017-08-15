@@ -84,6 +84,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private ArrayAdapter<String> adapter ;
 
     private ScheduledExecutorService service ;
+    private int isProvider ;
 
     @Override
     protected void onDestroy(){
@@ -125,10 +126,26 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 if( activeNetInfo != null && activeNetInfo.isAvailable()){
                     boolean isInter = pingIpAddress();
                     if(isInter){
-                        Toast.makeText(MainActivity.this,"请选择时间间隔！",Toast.LENGTH_SHORT).show();
+                        //获得位置管理器的实例
+                        isProvider = 0 ;
+                        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+                        List<String> providers = locationManager.getProviders(true);
+
+                        if(providers.contains(LocationManager.NETWORK_PROVIDER)){
+                            isProvider = 1 ;
+                        }else if(providers.contains(LocationManager.GPS_PROVIDER)){
+                            isProvider = 1 ;
+                        }else {
+                            isProvider = 0 ;
+                            Toast.makeText(MainActivity.this,"请开启位置服务提供器！",Toast.LENGTH_SHORT).show();
+                            Intent intent1 = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                            startActivityForResult(intent1,0);
+                        }
+                        if(isProvider == 1){
+                            Toast.makeText(MainActivity.this,"请选择时间间隔！",Toast.LENGTH_SHORT).show();
+                        }
                         menu();
                     }else{
-
                         Toast.makeText(MainActivity.this,"未连接上网,请检查网络连接",Toast.LENGTH_SHORT).show();
                     }
                     //Toast.makeText(MainActivity.this,"连接",Toast.LENGTH_SHORT).show();
@@ -301,7 +318,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
-    //书记添加，直接书写两个数据添加到数据库中
+    //数据添加，直接书写两个数据添加到数据库中
     private void addData(){
         LocationData location1 = new LocationData();
         location1.setLatitude("20.23423");
@@ -338,7 +355,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         MainActivity.this.startActivity(intent);
     }
 
-    //测试Tier时使用，Timer开始
+    //测试Timer时使用，Timer开始
     private void timerStart(){
         mTimer = new Timer();
         mTimerTask = new TimerTask() {
@@ -373,40 +390,27 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     //开始定位
     private void startLoc(){
-        //获得位置管理器的实例
-        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-        List<String> providers = locationManager.getProviders(true);
+            if(ContextCompat.checkSelfPermission(this,Manifest.permission.ACCESS_FINE_LOCATION)
+                    != PackageManager.PERMISSION_GRANTED){
+                return;
+            }else{
+                if(activeNetInfo != null && activeNetInfo.isAvailable()){
 
-        if(providers.contains(LocationManager.NETWORK_PROVIDER)){
+                    currentBestLocation = locationManager.getLastKnownLocation(NETWORK_PROVIDER);
 
-        }else if(providers.contains(LocationManager.GPS_PROVIDER)){
-
-        }else {
-            Intent intent1 = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-            startActivityForResult(intent1,0);
-        }
-
-        if(ContextCompat.checkSelfPermission(this,Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED){
-            return;
-        }else{
-            if(activeNetInfo != null && activeNetInfo.isAvailable()){
-
-                currentBestLocation = locationManager.getLastKnownLocation(NETWORK_PROVIDER);
-
-                locationManager.requestLocationUpdates(NETWORK_PROVIDER, 0, 0, networkListener);
-                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 12000 , 0,
-                        gpsListener);
-                locationManager.addGpsStatusListener(statusListener);
+                    locationManager.requestLocationUpdates(NETWORK_PROVIDER, 0, 0, networkListener);
+                    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 12000 , 0,
+                            gpsListener);
+                    locationManager.addGpsStatusListener(statusListener);
 
                     service = Executors
                             .newSingleThreadScheduledExecutor();
                     service.scheduleAtFixedRate(getLogginDmsRunner(),0,minTime, TimeUnit.MILLISECONDS);
 
-                Toast.makeText(MainActivity.this,"监听",Toast.LENGTH_SHORT).show();
-            }else{
+                    Toast.makeText(MainActivity.this,"监听",Toast.LENGTH_SHORT).show();
+                }else{
+                }
             }
-        }
     }
 
     //ScheduledExecutorService固定时间间隔将数据添加到数据库中
