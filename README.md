@@ -4,3 +4,4 @@ This is a project about developing android. I make it by using Java. The main fu
 Because of the time is short , I only accomplished two functions .
 The one is Location the user's location ,and another is export the data to a file whilch is named .xls . And if you want to know the introduce of this App ,
 You can click this link.https://www.zybuluo.com/Anni/note/757944
+And you can download this apk to install the new App .
